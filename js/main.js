@@ -1,23 +1,74 @@
 (function () {
+  // The one WhatsApp number every enquiry is sent to
+  var WA = '917004910439';
+
   var b = document.querySelector('.burger'), n = document.querySelector('nav.main');
-  if (b) b.addEventListener('click', function () {
-    var o = n.classList.toggle('open');
+  function setMenu(o) {
+    n.classList.toggle('open', o);
     b.setAttribute('aria-expanded', o);
+    b.textContent = o ? 'Close' : 'Menu';
+    document.body.classList.toggle('menu-open', o);
+  }
+  if (b) {
+    b.addEventListener('click', function () { setMenu(!n.classList.contains('open')); });
+    n.addEventListener('click', function (e) { if (e.target.closest('a')) setMenu(false); });
+    document.addEventListener('click', function (e) {
+      if (n.classList.contains('open') && !n.contains(e.target) && !b.contains(e.target)) setMenu(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && n.classList.contains('open')) { setMenu(false); b.focus(); }
+    });
+    window.matchMedia('(min-width: 961px)').addEventListener('change', function (e) { if (e.matches) setMenu(false); });
+  }
+
+  // Time-limited offers (crash course banner, card, dropdown option) remove themselves after their last day
+  document.querySelectorAll('[data-until]').forEach(function (el) {
+    if (Date.now() > Date.parse(el.dataset.until + 'T23:59:59+05:30')) el.remove();
   });
+
+  // Accepts "9876543210", "+91 98765 43210", "098765-43210"; returns the 10 digits, or '' if invalid
+  function mobile(v) {
+    var d = v.replace(/[\s()-]/g, '').replace(/^(\+91|91|0)(?=\d{10}$)/, '');
+    return /^[6-9]\d{9}$/.test(d) ? d : '';
+  }
 
   // Enquiry form -> opens WhatsApp with the details pre-filled
   document.querySelectorAll('form.enq').forEach(function (f) {
+    var ph = f.elements.phone, err = f.querySelector('.err'), thanks = f.querySelector('.thanks');
+    function check(show) {
+      var ok = !!mobile(ph.value);
+      ph.setCustomValidity(ok ? '' : 'Please enter a valid 10-digit mobile number.');
+      if (show || ok) {
+        err.hidden = ok;
+        ph.setAttribute('aria-invalid', !ok);
+      }
+      return ok;
+    }
+    check(false);
+    ph.addEventListener('input', function () { check(!err.hidden); });
+    ph.addEventListener('blur', function () { if (ph.value) check(true); });
+    ph.addEventListener('invalid', function () { check(true); });
     f.addEventListener('submit', function (e) {
       e.preventDefault();
+      if (!check(true)) return ph.focus();
       var d = new FormData(f);
       var msg = 'Hello Advent Academy, I would like to enquire.%0A' +
         'Student: ' + encodeURIComponent(d.get('name')) + '%0A' +
         'Class / Course: ' + encodeURIComponent(d.get('course')) + '%0A' +
-        'Parent phone: ' + encodeURIComponent(d.get('phone')) +
+        'Parent phone: ' + encodeURIComponent('+91 ' + mobile(d.get('phone'))) +
         (d.get('note') ? '%0A' + encodeURIComponent(d.get('note')) : '');
-      window.open('https://wa.me/' + f.dataset.wa + '?text=' + msg, '_blank', 'noopener');
+      window.open('https://wa.me/' + WA + '?text=' + msg, '_blank', 'noopener');
+      thanks.hidden = false;
     });
   });
+
+  // On desktop the floating WhatsApp pill steps aside while the enquiry form is on screen
+  var act = document.querySelector('.actbar'), form = document.querySelector('form.enq');
+  if (act && form && 'IntersectionObserver' in window) {
+    new IntersectionObserver(function (es) {
+      act.classList.toggle('away', es[0].isIntersecting);
+    }).observe(form);
+  }
 
   // Header shadow + reading progress bar
   var head = document.querySelector('header.site'), bar = document.createElement('div'), ticking = false;
@@ -42,14 +93,14 @@
       e.target.classList.add('in');
       io.unobserve(e.target);
     });
-  }, { rootMargin: '0px 0px -8% 0px' });
+  }, { rootMargin: '0px 0px 10% 0px' });
 
   // Scroll reveal: siblings stagger, two-column blocks slide in from either side
   var reveal = '.sec-head,.prog .row,.reason,.tcard,.split>div,.courseblock,.facts>div,.faq details,.contact-list li,.map,.cta-band .wrap>*,.ticks li,.fgrid>div';
   document.querySelectorAll(reveal).forEach(function (el) {
     var p = el.parentNode, i = Array.prototype.indexOf.call(p.children, el);
     if (p.matches('.split,.cta-band .wrap')) el.classList.add(i ? 'rv-r' : 'rv-l');
-    else el.style.setProperty('--d', Math.min(i, 7));
+    else el.style.setProperty('--d', Math.min(i, 5));
     el.classList.add('rv');
     // drop the reveal classes once done so hover transforms work again
     el.addEventListener('animationend', function done(e) {
